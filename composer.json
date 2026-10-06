@@ -1,0 +1,33 @@
+{
+  "name": "phpmongo/phpmongo",
+  "description": "Private read-only MongoDB browser",
+  "type": "project",
+  "license": "MIT",
+  "require": {
+    "php": "^8.2",
+    "ext-json": "*",
+    "ext-openssl": "*",
+    "ext-mongodb": "^2.5",
+    "slim/slim": "^4.15",
+    "slim/psr7": "^1.8",
+    "mongodb/mongodb": "^2.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "PhpMongo\\": "src/"
+    }
+  },
+  "scripts": {
+    "test": "@php tests/run.php",
+    "docs": "@php vendor/bin/phpdoc --config phpdoc.dist.xml"
+  },
+  "config": {
+    "sort-packages": true,
+    "allow-plugins": {
+      "phpdocumentor/shim": true
+    }
+  },
+  "require-dev": {
+    "phpdocumentor/shim": "^3.10"
+  }
+}
