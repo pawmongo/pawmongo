@@ -19,3 +19,18 @@
 
 /.agents/
 /skills-lock.json
+
+# Local AI tooling and assistant configuration
+/.claude/
+/.codex/
+/.cursor/
+/.github/copilot-instructions.md
+/.github/instructions/
+/.github/agents/
+/.github/prompts/
+/.aider*
+/.openai/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.cursorrules
