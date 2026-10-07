@@ -32,5 +32,4 @@ function start(command, args) {
 
 process.on('SIGINT', () => stop());
 process.on('SIGTERM', () => stop());
-start('php', ['-S', '127.0.0.1:8080', '-t', 'public', 'public/router.php']);
 start(process.execPath, ['node_modules/next/dist/bin/next', 'dev', 'frontend', '--hostname', '127.0.0.1', '--port', '3000']);

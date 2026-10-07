@@ -3,6 +3,8 @@
 !/.gitignore
 !/package.json
 !/package-lock.json
+!/LICENSE
+!/README.md
 
 # Next.js source, routes, styles, and configuration.
 !/frontend/
@@ -26,6 +28,12 @@
 !/public/assets/
 /public/assets/*
 !/public/assets/icons/
+
+# Next.js asset checks and import parser tests.
+!/tests/
+/tests/*
+!/tests/import-file.mjs
+!/tests/next-assets.mjs
 
 # Local tooling, credentials, caches, and logs at any depth.
 **/.agents/
