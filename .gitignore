@@ -47,3 +47,5 @@
 **/GEMINI.md
 **/.cursorrules
 **/*.log
+
+!/tests/mock-browser.mjs

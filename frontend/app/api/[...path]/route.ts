@@ -1,6 +1,9 @@
 import type { NextRequest } from 'next/server';
+import { mockResponse } from '../../../src/mock/api';
 
 async function forward(request: NextRequest) {
+  const demo = process.env.PHPMONGO_MOCK_DATA === '1' || (process.env.PHPMONGO_MOCK_DATA !== '0' && !process.env.PHPMONGO_API_URL);
+  if (demo) return mockResponse(request);
   const backend = process.env.PHPMONGO_API_URL ?? 'http://127.0.0.1:8080';
   const url = new URL(request.nextUrl.pathname + request.nextUrl.search, backend);
   const headers = new Headers(request.headers);
