@@ -34,3 +34,7 @@ AGENTS.md
 CLAUDE.md
 GEMINI.md
 .cursorrules
+
+/frontend/.next/
+/frontend/public/
+/frontend/tsconfig.tsbuildinfo

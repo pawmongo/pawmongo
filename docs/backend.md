@@ -21,7 +21,7 @@ Start the server, then choose and confirm your master password on the browser se
 php -S 127.0.0.1:8080 -t public public/router.php
 ```
 
-Run `npm ci` and `npm run build` before opening `http://127.0.0.1:8080` to use the React dashboard. Without built assets, the entry page describes the backend.
+The frontend now uses Next.js App Router. Run `npm ci` and `npm run dev`, then open `http://127.0.0.1:3000`. The dev command starts the PHP API on port 8080 and Next.js on port 3000. For production, run `npm run build`, keep the PHP backend running, and run `npm start`. `PHPMONGO_API_URL` configures the API backend at runtime. PHP configuration, sessions, and MongoDB operations remain private to the PHP API.
 
 Browser setup stores a password hash directly; a preconfigured cleartext password is still converted on first execution. Bootstrap generates the encryption secret through locked atomic config replacement. The generated config is private (mode 0600 on Unix). Both the file and its parent directory need suitable ownership and write permissions for replacement. Configure the web server to serve **only `public/`**, never the repository root.
 
@@ -46,12 +46,12 @@ Missing configurations inherit the local-only template. Remote deployments must 
 All API responses are JSON with `Cache-Control: no-store`. Retain the HttpOnly session cookie.
 
 1. `GET /api/auth/status` returns authentication state and an anonymous `csrf_token`.
-2. `POST /api/auth/login` with `{"password":"…"}` and `X-CSRF-Token` authenticates and rotates both the session ID and token. Retain the new token.
-3. `POST /api/connection` with `{"uri":"mongodb://…"}` and the new token verifies the database connection and stores only its encrypted URI in the session.
+2. `POST /api/auth/login` with `{"password":"…"}` and `X-CSRF-Token` authenticates and rotates both the session ID and token, then restores any saved encrypted MongoDB connection. The response includes `connected`. Retain the new token.
+3. `POST /api/connection` with `{"uri":"mongodb://…"}` and the new token verifies the database connection, then atomically writes its AES-256-GCM encrypted URI to `mongodb.encrypted_uri` in the private configuration and activates it in the session. Failed verification leaves the saved configuration intact; configuration write failures return 503.
 4. Use the read-only data endpoints below.
-5. `POST /api/auth/logout` destroys the session; `DELETE /api/connection` clears only the database connection. Both require the token.
+5. `POST /api/auth/logout` destroys the session; `DELETE /api/connection` clears only the active session connection. Neither deletes the saved connection from configuration. Both require the token.
 
-POST `/api/data/collections` is the explicit schema mutation: it creates an empty ordinary collection. Document writes, collection drops, arbitrary database commands, and user-submitted pipelines remain unavailable. All unsafe methods require CSRF validation. A best-effort logout beacon can submit an URL-encoded `csrf_token`; hiding a tab must not automatically log out another active tab.
+POST `/api/data/collections` creates an empty ordinary collection. PATCH on the same endpoint renames it using `db`, `collection`, and `name`, without replacing an existing target. DELETE removes the named collection and its documents after confirmation in the UI. System databases and system collection names are excluded. POST `/api/data/documents` creates one document in an existing ordinary collection. It accepts `db`, `collection`, and `document` (a JSON object encoded as a string, up to 12 KB, with Extended JSON types supported). It requires authentication, a connection, CSRF, and MongoDB insert permission. Success returns 201, duplicate keys 409, invalid JSON or schema validation failures 400, and permission failures 403. GET `/api/data/document-edit` loads complete editable fields up to 12 KB, excluding the ID. PATCH `/api/data/documents` updates the supplied top-level fields and preserves omitted fields; DELETE removes one document by typed ID. Both require authentication, connection, CSRF, and MongoDB permissions. The ID is immutable, system targets are blocked, and the UI confirms deletion. Arbitrary database commands and user-submitted pipelines remain unavailable. All unsafe methods require CSRF validation. Refreshing or leaving a page preserves the server session. Explicit sign-out or one hour of inactivity ends it; the session cookie has no persistent lifetime.
 
 | Method | Endpoint | Parameters |
 | --- | --- | --- |
@@ -142,3 +142,7 @@ phpDocumentor is installed through its official Composer shim as a development d
 ## Collection creation
 
 Authenticated, connected administrators can create an empty collection with `POST /api/data/collections`. Only database and collection names are accepted; arbitrary options, capped collections, views, and validators are excluded. The server blocks system databases, `system.` collections, dollar signs, malformed names, and surrounding whitespace. MongoDB creation permissions are enforced. Requests use a five-second limit and acknowledged write concern. Success returns 201; existing names return 409 and permission denials return 403. A read-only MongoDB account can still browse documents.
+
+## Collection workspace APIs
+
+Authenticated `/api/data/tools/<tool>` endpoints provide count, explain, monitoring, schema, visualization, aggregation, indexes, validation, import, and bulk operations. POST actions require the existing CSRF token. See [collection workspace](collection-workspace.md) for behavior and bounds. Document browsing also accepts `page_size` of 10, 25, 50, or 100.

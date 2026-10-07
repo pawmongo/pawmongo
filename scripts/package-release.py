@@ -16,6 +16,8 @@ VERSION = '1.0.0'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--composer', default='composer', help='Composer executable or .phar path')
 args = parser.parse_args()
+if (ROOT / 'frontend/app').exists():
+    parser.error('This legacy packager creates PHP-only releases. The Next.js frontend requires a Node.js deployment; use npm run build and npm start for this checkout.')
 if args.composer.endswith('.phar'):
     if not Path(args.composer).is_file():
         parser.error('Composer PHAR not found. Supply its path with --composer /path/to/composer.phar.')

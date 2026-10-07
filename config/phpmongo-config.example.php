@@ -1,6 +1,9 @@
 <?php
 // Copy to phpmongo-config.php. Serve ONLY the public/ directory.
 return [
+    'mongodb' => [
+        'encrypted_uri' => '', // Verified connection is saved here automatically, encrypted.
+    ],
     'security' => [
         'master_password' => '', // Set before first use; replaced with a hash automatically.
         'master_password_hash' => '',

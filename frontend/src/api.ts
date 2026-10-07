@@ -15,9 +15,6 @@ let csrf = '';
 let onUnauthorized: (() => void) | undefined;
 export function setCsrf(token: string | null) { csrf = token ?? ''; }
 export function unauthorizedHandler(handler: () => void) { onUnauthorized = handler; }
-export function logoutBeacon() {
-  if (csrf) navigator.sendBeacon('/api/auth/logout', new URLSearchParams({ csrf_token: csrf }));
-}
 export async function api<T>(path: string, method = 'GET', body?: unknown, signal?: AbortSignal): Promise<T> {
   const response = await fetch(path, {
     method, credentials: 'same-origin', cache: 'no-store', signal,

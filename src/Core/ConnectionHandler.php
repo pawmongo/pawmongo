@@ -17,7 +17,7 @@ final class ConnectionHandler
      * @param Session $session Session to invalidate on integrity failure.
      * @throws ApiException If the encryption key is invalid.
      */
-    public function __construct(array $config, private readonly Session $session)
+    public function __construct(private readonly array $config, private readonly Session $session)
     {
         $key = hex2bin($config['security']['encryption_key']);
         if ($key === false || strlen($key) !== 32) {
@@ -47,7 +47,19 @@ final class ConnectionHandler
         } catch (\Throwable) {
             throw new ApiException('Connection verification failed. Check credentials, network access, and TLS settings.', 422);
         }
-        $_SESSION['mongo_conn'] = $this->encrypt($uri);
+        $encrypted = $this->encrypt($uri);
+        Config::saveConnection($this->config['config_path'], $encrypted);
+        $_SESSION['mongo_conn'] = $encrypted;
+    }
+    /** Restore private saved credentials only after master-password authentication. */
+    public function restore(): bool
+    {
+        if (!$this->session->authenticated()) return false;
+        $saved = $this->config['mongodb']['encrypted_uri'] ?? '';
+        if ($saved === '') return false;
+        $_SESSION['mongo_conn'] = $saved;
+        $this->uri(); // Authenticate the saved envelope before activating it.
+        return true;
     }
     /**
      * Create an AES-256-GCM envelope with a fresh IV and authenticated context.

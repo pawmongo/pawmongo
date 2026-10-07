@@ -21,12 +21,13 @@ final class Installer
     public static function create(string $path, string $root, array $settings, Session $session): App
     {
         $app = AppFactory::create();
-        $app->get('/', function (Request $request, Response $response) use ($root) {
+        $page = function (Request $request, Response $response) use ($root) {
             $file = $root . '/templates/app.html';
             if (!is_file($file)) throw new ApiException('Build the frontend assets before opening setup.', 503);
             $response->getBody()->write((string)file_get_contents($file));
             return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
-        });
+        };
+        foreach (\PhpMongo\Core\PageRoutes::PATHS as $pagePath) $app->get($pagePath, $page);
         $app->get('/api/ui', fn(Request $request, Response $response) => Json::response($response, UiConfig::publicContent($settings)));
         $app->get('/api/auth/status', fn(Request $request, Response $response) => Json::response($response, [
             'authenticated' => false, 'connected' => false, 'setup_required' => true,

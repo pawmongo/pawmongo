@@ -27,6 +27,7 @@ final class Application
         $app = AppFactory::create();
         $connection = new ConnectionHandler($config, $session);
         $database = new DatabaseController($connection);
+        $explorer = new \PhpMongo\Handlers\ExplorerController($connection);
         $app->get('/api/health', fn(Request $request, Response $response) => Json::response($response, ['status' => 'ok', 'mode' => 'document-browsing-and-collection-creation', 'version' => '1.0.0-dev']));
         $app->get('/api/ui', fn(Request $request, Response $response) => Json::response($response, UiConfig::publicContent($config)));
         $app->get('/api/auth/status', function (Request $request, Response $response) use ($session, $config) {
@@ -38,7 +39,7 @@ final class Application
                 'warnings' => $authenticated ? $config['warnings'] : [],
             ]);
         });
-        $app->post('/api/auth/login', function (Request $request, Response $response) use ($config, $session) {
+        $app->post('/api/auth/login', function (Request $request, Response $response) use ($config, $session, $connection) {
             $body = self::body($request);
             $password = $body['password'] ?? null;
             if (!is_string($password) || strlen($password) > 4096) {
@@ -51,7 +52,8 @@ final class Application
                     : password_verify($password, $security['master_password_hash']);
             });
             $session->login();
-            return Json::response($response, ['authenticated' => true, 'csrf_token' => $_SESSION['csrf'], 'warnings' => $config['warnings']]);
+            $connected = $connection->restore();
+            return Json::response($response, ['authenticated' => true, 'connected' => $connected, 'csrf_token' => $_SESSION['csrf'], 'warnings' => $config['warnings']]);
         });
         $app->post('/api/auth/logout', function (Request $request, Response $response) use ($session) {
             $session->destroy();
@@ -70,18 +72,29 @@ final class Application
             return Json::response($response, ['connected' => false]);
         });
         $app->post('/api/data/collections', fn(Request $request, Response $response) => $database->createCollection(self::body($request), $response));
+        $app->patch('/api/data/collections', fn(Request $request, Response $response) => $database->changeCollection(self::body($request), $response));
+        $app->delete('/api/data/collections', fn(Request $request, Response $response) => $database->changeCollection(self::body($request), $response, true));
         $app->get('/api/data/structure', [$database, 'structure']);
         $app->get('/api/data/documents', [$database, 'preview']);
+        $app->post('/api/data/documents', fn(Request $request, Response $response) => $database->createDocument(self::body($request), $response));
+        $app->get('/api/data/document-edit', fn(Request $request, Response $response) => $database->editableDocument($request->getQueryParams(), $response));
+        $app->patch('/api/data/documents', fn(Request $request, Response $response) => $database->mutateDocument(self::body($request), $response));
+        $app->delete('/api/data/documents', fn(Request $request, Response $response) => $database->mutateDocument(self::body($request), $response, true));
         $app->get('/api/data/document-details', [$database, 'details']);
-        $app->get('/', function (Request $request, Response $response) {
+        $app->get('/api/data/tools/{tool}', fn(Request $request, Response $response, array $args) => $explorer->run($args['tool'], $request->getQueryParams(), $response));
+        $app->post('/api/data/tools/{tool}', fn(Request $request, Response $response, array $args) => $explorer->run($args['tool'], self::body($request), $response, true));
+        $page = function (Request $request, Response $response) use ($config) {
             $template = dirname(__DIR__) . '/templates/app.html';
-            $response->getBody()->write(file_get_contents(is_file($template) ? $template : dirname(__DIR__) . '/templates/backend.html'));
+            $html = file_get_contents(is_file($template) ? $template : dirname(__DIR__) . '/templates/backend.html');
+            $nonce = htmlspecialchars($config['style_nonce'] ?? '', ENT_QUOTES, 'UTF-8');
+            $response->getBody()->write(str_replace('</head>', '<meta name="style-nonce" content="' . $nonce . '"></head>', $html));
             return $response->withHeader('Content-Type', 'text/html; charset=utf-8');
-        });
+        };
+        foreach (\PhpMongo\Core\PageRoutes::PATHS as $pagePath) $app->get($pagePath, $page);
         $app->add(function (Request $request, RequestHandlerInterface $handler) use ($session) {
             $path = $request->getUri()->getPath();
             $public = ['/', '/api/health', '/api/ui', '/api/auth/status', '/api/auth/login'];
-            if (!in_array($path, $public, true) && !$session->authenticated()) {
+            if (!in_array($path, $public, true) && !\PhpMongo\Core\PageRoutes::matches($path) && !$session->authenticated()) {
                 throw new ApiException('Master-password authentication is required.', 401);
             }
             if (in_array($request->getMethod(), ['POST', 'DELETE', 'PUT', 'PATCH'], true)) {
@@ -98,7 +111,7 @@ final class Application
         $errors->setDefaultErrorHandler(function (Request $request, \Throwable $error) use ($app) {
             $status = $error instanceof ApiException ? $error->status : ($error instanceof HttpException ? $error->getCode() : 500);
             $message = $error instanceof ApiException ? $error->getMessage() : match ($status) {
-                404 => 'Endpoint not found.', 405 => 'Method is not available. Document writes are disabled.',
+                404 => 'Endpoint not found.', 405 => 'Method is not available.',
                 default => 'Database operation failed. Check database permissions, server compatibility, and query limits.',
             };
             return Json::response($app->getResponseFactory()->createResponse(), ['error' => $message], $status);
@@ -107,15 +120,22 @@ final class Application
     }
     private static function body(Request $request): array
     {
-        if ((int)$request->getHeaderLine('Content-Length') > 16384) {
-            throw new ApiException('Request body exceeds 16 KiB.', 413);
+        $limit = $request->getUri()->getPath() === '/api/data/tools/import' ? 64 * 1024 * 1024 : 16384;
+        $sizeError = $limit === 16384 ? 'Request body exceeds 16 KiB.' : 'Import request exceeds 64 MB.';
+        if ((int)$request->getHeaderLine('Content-Length') > $limit) {
+            throw new ApiException($sizeError, 413);
         }
         $stream = $request->getBody();
         $stream->rewind();
-        $raw = $stream->read(16385);
+        $raw = '';
+        while (!$stream->eof() && strlen($raw) < $limit + 1) {
+            $chunk = $stream->read($limit + 1 - strlen($raw));
+            if ($chunk === '') break;
+            $raw .= $chunk;
+        }
         $stream->rewind();
-        if (strlen($raw) > 16384) {
-            throw new ApiException('Request body exceeds 16 KiB.', 413);
+        if (strlen($raw) > $limit) {
+            throw new ApiException($sizeError, 413);
         }
         if (str_starts_with($request->getHeaderLine('Content-Type'), 'application/x-www-form-urlencoded')) {
             parse_str($raw, $body);

@@ -81,6 +81,7 @@ final class Config
             $config['security']['force_local_boundary'] = $local;
             $config['warnings'] = $warnings;
             $config['storage'] = $root . '/var';
+            $config['config_path'] = $path;
             return $config;
         } finally {
             if ($lock !== false) {
@@ -164,6 +165,20 @@ final class Config
             throw new ApiException('Configuration must return an array.', 503);
         }
         return $config;
+    }
+    public static function saveConnection(string $path, string $encryptedUri): void
+    {
+        $lock = @fopen(dirname($path) . '/phpmongo-config.lock', 'c');
+        if ($lock === false) throw new ApiException('Cannot save MongoDB connection. Check configuration directory permissions.', 503);
+        try {
+            if (!flock($lock, LOCK_EX)) throw new ApiException('Configuration is busy. Try again.', 503);
+            $config = self::read($path);
+            $config['mongodb']['encrypted_uri'] = $encryptedUri;
+            if (!self::replace($path, $config)) throw new ApiException('Cannot save MongoDB connection. Check configuration file and directory permissions.', 503);
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
     private static function replace(string $path, array $config): bool
     {

@@ -10,7 +10,7 @@ phpMongo gives developers a visual workspace for exploring local or remote Mongo
 
 ![phpMongo collection explorer with database navigation, JSON filtering, and document previews](docs/images/explorer.png)
 
-Browse collections, filter documents, and inspect typed values in a private workspace with read-only document browsing.
+Browse collections, filter documents, and inspect typed values in a private workspace with a quick form for creating documents.
 
 ![phpMongo document inspector showing a nested array item selected by field path](docs/images/document-details.png)
 
@@ -22,9 +22,9 @@ Open a document and explore a specific nested field. Screenshots show the runnin
 - **Find the documents you need:** filter with JSON or MongoDB Extended JSON, sort columns, and paginate results.
 - **Inspect complex data:** open individual documents and expand bounded views of nested fields with BSON types preserved.
 - **Keep access private:** unlock with a separate master password before entering MongoDB credentials. Local access is the default.
-- **Create collections:** add an empty collection in an existing or new database, with MongoDB permissions enforced.
-- **Choose your look:** select Sage, Ocean, Sand, or Midnight from the theme dropdown.
-- **Browse documents read-only:** document inserts, updates, deletes, and collection drops remain unavailable.
+- **Manage collections:** create an empty collection, or hover over a collection in the sidebar to rename or delete it. Deletion requires confirmation and removes all documents in that collection. MongoDB permissions are enforced.
+- **Choose your look:** switch between Light and Dark with the sun/moon icon.
+- **Create documents quickly:** add named fields with text, number, Yes/No, null, or nested JSON values. MongoDB generates the ID automatically. Use the row icons to edit document fields or delete a document with confirmation.
 
 The interface includes colourful SVG icons and populated community or sponsor placements on the login screen, sidebar, and this README.
 
@@ -56,6 +56,12 @@ For remote HTTPS hosting, first copy the configuration template and set `securit
 
 ### 3. Start phpMongo
 
+The current source checkout uses Next.js for the frontend and PHP for its API. Run `npm install`, then `npm run dev`, and open **http://127.0.0.1:3000**. This starts both servers. For production, run `npm run build`, start the PHP API, then `npm start`. Set `PHPMONGO_API_URL` when the PHP API uses a different address.
+
+Pages have their own paths: `/setup`, `/login`, `/connect`, `/workspace`, and `/databases/<database>/collections/<collection>`. Collection URLs survive refresh and support browser Back/Forward.
+
+The previously built PHP-only release uses the instructions below:
+
 From the extracted directory, run:
 
 ```sh
@@ -84,19 +90,21 @@ To match an ObjectId, use MongoDB Extended JSON:
 ```
 
 5. **Inspect a row** to view its document details. Use a field path such as `items.21` to inspect a specific nested value.
-6. **Create a collection** with **Create collection**: choose the database, enter a collection name, and submit. Your MongoDB account needs permission to create it. The new collection opens automatically.
-7. **Choose a theme** from the dropdown. The browser remembers only this display preference.
+6. **Create a collection** using the plus icon next to its database in the sidebar: enter a collection name and submit. Your MongoDB account needs permission to create it. The new collection opens automatically.
+7. **Switch Light or Dark** with the sun/moon icon. The browser remembers only this display preference.
 8. **Disconnect** to clear the database connection, or **sign out** to end your application session.
 
-MongoDB credentials are encrypted in the server-side session using AES-256-GCM. Sessions expire after one hour of inactivity. Closing or reloading the tab sends a best-effort logout notification.
+Verified MongoDB credentials are saved with AES-256-GCM encryption in the private configuration file and restored after master-password login. They are also encrypted in the server-side session. Sessions expire after one hour of inactivity; refresh preserves your session. Disconnect clears the active connection, while sign-out ends the session. Neither removes the saved connection.
 
 ## Release status and limits
 
 **v1.0.0 is packaged and verified on Linux with PHP 8.3 and MongoDB 7.0.** Verification includes 116 backend checks and 40 browser checks. Windows/macOS package validation remains pending.
 
-The explorer shows 50 documents per page, up to page 200. Preview responses are limited to 1 MiB and details to 2 MiB; large or nested values carry truncation metadata. Queries have a five-second execution limit. Pagination can shift when other clients change the collection.
+The explorer supports 10, 25, 50 (default), or 100 documents per page, up to page 200. Preview responses are limited to 1 MiB and details to 2 MiB; large or nested values carry truncation metadata. Queries have a five-second execution limit. Pagination can shift when other clients change the collection.
 
 System databases (`admin`, `local`, and `config`), JavaScript execution, regex filters, and unlisted query operators are blocked. See [the API guide](docs/backend.md) for supported operators, typed identifiers, and expansion limits.
+
+Database names in the sidebar and the overview Explore buttons open `/databases/<database>`, with an collection table. Sort the names, open a collection, or use its rename/delete actions.
 
 ## Development
 
@@ -132,7 +140,7 @@ Bug reports, documentation improvements, and focused pull requests are welcome. 
 
 ## Support phpMongo
 
-**Help make MongoDB exploration easier.** Improve the documentation, report reproducible bugs, or contribute to the read-only workspace. Start with the [developer guide](docs/backend.md).
+**Help make MongoDB exploration easier.** Improve the documentation, report reproducible bugs, or contribute to the workspace. Start with the [developer guide](docs/backend.md).
 
 The login, sidebar, and README sponsorship placements stay populated with community calls to action when no paid sponsor is configured. See [sponsorship configuration](docs/frontend.md#sponsorship-and-icons) to configure the dashboard placements.
 
@@ -141,3 +149,9 @@ The login, sidebar, and README sponsorship placements stay populated with commun
 phpMongo is licensed under the [MIT License](LICENSE). Bundled dependencies and third-party assets retain their respective licenses and provenance, included in the release package.
 
 If phpMongo helps you explore your data, please consider [giving the project a star on GitHub](https://github.com/phpmongolab/phpmongo). Thank you for your support!
+
+Documents appear as numbered field-and-value cards with BSON type labels, expandable objects and arrays, and inline field editing. Document filters, sorting, and pagination run against MongoDB.
+
+### Collection workspace tools
+
+The reference workspace now includes Documents, Aggregations, Schema, Indexes, and Validation tabs; query history, a typed query generator, Explain and Options; document import, confirmed bulk updates/deletes, and code export; pagination and list/JSON/table views; collection monitoring and data charts. See [collection workspace behavior and limits](docs/collection-workspace.md).

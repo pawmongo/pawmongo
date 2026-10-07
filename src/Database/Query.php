@@ -30,7 +30,7 @@ final class Query
         return [$db, $collection];
     }
     /**
-     * Validate names for the single allowed schema mutation: collection creation.
+     * Validate ordinary collection names for collection management.
      * @param array<string, mixed> $params Database and collection names only.
      * @return array{0: string, 1: string} Validated non-system target.
      * @throws ApiException If names are reserved, malformed, or options are supplied.

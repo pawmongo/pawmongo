@@ -5,7 +5,8 @@ header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('X-Frame-Options: DENY');
 header('Referrer-Policy: no-referrer');
-header("Content-Security-Policy: default-src 'self'; style-src 'self'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
+$styleNonce = base64_encode(random_bytes(18));
+header("Content-Security-Policy: default-src 'self'; style-src 'self' 'nonce-$styleNonce'; script-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'");
 $root = dirname(__DIR__);
 try {
     $missing = [];
@@ -33,6 +34,7 @@ try {
         $config = \PhpMongo\Core\Config::load($configPath, $root, static fn(array $settings) => \PhpMongo\Core\AccessBoundary::enforce($settings, $_SERVER));
     }
     $secure = \PhpMongo\Core\AccessBoundary::secure($_SERVER);
+    $config['style_nonce'] = $styleNonce;
     $assetPath = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
     if (str_starts_with($assetPath, '/assets/')) {
         $directory = realpath(__DIR__ . '/assets');

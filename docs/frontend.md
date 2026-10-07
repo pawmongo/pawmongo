@@ -1,39 +1,30 @@
 # Frontend development and verification
 
-The React, TypeScript, Vite, and Tailwind interface is connected to the Slim backend. It includes master-password login, connection verification, database/collection discovery, direct collection opening, validated Extended JSON filters, column sorting, pagination, and bounded document/field inspection.
+The Next.js, React, TypeScript, and Tailwind interface is connected to the Slim backend. It includes master-password login, connection verification, database/collection discovery, direct collection opening, validated Extended JSON filters, column sorting, pagination, and bounded document/field inspection.
 
 ## Build and run
 
-Install PHP dependencies and configure the master password as described in [backend setup](backend.md), then:
+Install PHP dependencies and configure the master password as described in [backend setup](backend.md). For development:
 
 ```sh
 npm ci
-npm run build
-php -S 127.0.0.1:8080 -t public public/router.php
-```
-
-Open `http://127.0.0.1:8080`. The build writes the compiled HTML into `templates/app.html` and browser assets into `public/assets/`; it preserves the PHP entry points. Node and npm are development requirements only. A release ZIP will contain the built assets.
-
-For live frontend development, keep the PHP server running and use a second terminal:
-
-```sh
 npm run dev
 ```
 
-Open the Vite URL. Vite serves the SVG icons directly from `public/assets/icons/`, so icons do not depend on the PHP server. API requests are proxied to PHP on port 8080; login and database browsing require that server to be running. Set `PHPMONGO_API_URL` in the Vite process environment to use another local PHP port. The Vite server binds only to loopback by default.
+Open `http://127.0.0.1:3000`. The development script starts Next.js and the PHP API server. For production, build with `npm run build`, run the PHP API server separately, then run `npm start`. `PHPMONGO_API_URL` chooses the PHP API origin (default `http://127.0.0.1:8080`). Node and PHP are both runtime requirements.
 
 ## Interface behavior
 
-- Master-password fields are masked; the connection URI is visible while being entered. Credentials are never written into localStorage or sessionStorage; the chosen display theme alone can be stored as `phpmongo-theme`; form values are cleared after success.
+- Master-password fields are masked; the connection URI is visible while being entered. Credentials are never written into localStorage or sessionStorage; the display theme is stored as `phpmongo-theme` and recently submitted filters are stored per namespace; form values are cleared after success.
 - Login and database-connection steps remain separate. Master-password authentication is required before any connection URI is submitted.
 - Sidebar discovery shows actual databases and collections. Direct opening supports accounts that cannot list the whole hierarchy.
 - Filters use object-root Extended JSON. Ctrl/Command + Enter submits the filter. Column headers apply sorting; the backend supplies the `_id` tie-breaker.
-- Result counts describe the current page, not the entire collection. Previous/next controls honor the 200-page ceiling.
+- The result count describes the current page; the count badge and pagination range use the actual filtered total. Previous/next controls honor the 200-page ceiling.
 - Detail dialogs retain BSON type information and conservative truncation metadata. A path such as `items.21` requests bounded expansion beyond the first array slice.
 - Sign out removes authentication and connection state; disconnect retains master-password authentication. Server-side expiry clears the explorer and returns to login.
 - Requests for obsolete queries are aborted so earlier collection responses do not overwrite a newer selection.
 - The developer guide is available in an accessible native dialog. Desktop and narrow-screen navigation use the same live data.
-- Best-effort pagehide logout applies when leaving or closing the panel, including a full-page reload. Opening an internal guide does not leave the page. Explicit logout and the server's idle check remain the reliable lifecycle controls.
+- Reload preserves the authenticated session. Explicit logout and the server idle check end it.
 
 ## Sponsorship and icons
 
@@ -68,7 +59,7 @@ npm run build
 npm run test:browser
 ```
 
-The browser test uses Playwright, the installed PHP MongoDB extension, and `mongod`. It launches isolated MongoDB/PHP processes, seeds test-only documents, and verifies the real UI/API flow. It also checks the Vite development proxy, sponsor dimensions, credential storage, desktop/mobile navigation, forbidden filters, typed detail expansion, expiry, and unchanged database contents.
+The browser test uses Playwright, the installed PHP MongoDB extension, and `mongod`. It launches isolated MongoDB/PHP processes, seeds test-only documents, and verifies the real UI/API flow. It also checks the Next.js API proxy, sponsor dimensions, credential storage, desktop/mobile navigation, forbidden filters, typed detail expansion, expiry, and unchanged database contents.
 
 Install a matching browser when no compatible workspace browser is available:
 
@@ -88,8 +79,22 @@ Run `npm run test:assets` to verify icon loading while the PHP backend is unavai
 
 When no master password is configured, the interface shows a single setup screen with password and confirmation fields. Successful setup opens the login screen. Passwords are sent only to the CSRF-protected Slim setup endpoint and are never saved in browser storage.
 
-### Collection creation and themes
+### Collection creation and appearance
 
-The connected workspace exposes Create collection. Its dialog accepts database and collection names, shows server validation or permission errors, and opens the created collection after refreshing navigation. Existing document views stay read-only.
+Each database row in the sidebar has a plus icon for Create collection. Its dialog uses that database, asks only for the collection name, shows server validation or permission errors, and opens the created collection after refreshing navigation.
 
-The Theme dropdown offers Sage, Ocean, Sand, and Midnight on setup, login, connection, and workspace screens. Only the selected theme name is saved locally. All interface text is at least 12px.
+The sun/moon icon button switches between Light and Dark on setup, login, connection, and workspace screens. Tailwind v4 uses a class-based dark variant and shared color tokens for the interface and document cards. Only `light` or `dark` is saved locally as `phpmongo-theme`; a nonce-protected script restores it before rendering. All interface text is at least 12px.
+
+### Database pages
+
+Click a database name or its overview Explore button to open `/databases/<database>`. The collection table lists discovered collection names and supports sorting. Open, rename, delete, refresh, and create collection actions use the selected database. Direct URLs, reloads, and browser history retain the database page; unauthenticated visits return to it after sign-in. The sidebar disclosure arrow still expands or collapses collections.
+
+Documents appear as numbered field-and-value cards with BSON type labels, expandable objects and arrays, and inline field editing. Expanding a summarized object or array fetches bounded field details on demand. Document filters, sorting, and pagination run against MongoDB.
+
+### Reference workspace controls
+
+See [collection workspace](collection-workspace.md) for tabs, query tools, import and bulk writes, code export, document views, monitoring, visualization, and their API and sampling limits.
+
+### Application font
+
+Libre Franklin is bundled locally with variable weights and normal/italic faces. The entire application uses `font-family: 'Libre Franklin', sans-serif`, including document values, code editors, tables, and form controls. The outlined SVG logo retains its own lettering.
