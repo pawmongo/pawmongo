@@ -6,7 +6,10 @@
   "scripts": {
     "dev": "vite --config frontend/vite.config.ts",
     "build": "tsc --project frontend/tsconfig.json --noEmit && node scripts/build-frontend.mjs",
-    "test:browser": "node tests/browser.mjs"
+    "test:browser": "node tests/browser.mjs",
+    "test:assets": "node tests/vite-assets.mjs",
+    "package": "python3 scripts/package-release.py",
+    "verify:release": "python3 scripts/verify-release.py"
   },
   "dependencies": {
     "@fontsource-variable/manrope": "^5.3.0",

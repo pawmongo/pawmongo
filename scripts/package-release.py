@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,12 +16,18 @@ VERSION = '1.0.0'
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--composer', default='composer', help='Composer executable or .phar path')
 args = parser.parse_args()
+if args.composer.endswith('.phar'):
+    if not Path(args.composer).is_file():
+        parser.error('Composer PHAR not found. Supply its path with --composer /path/to/composer.phar.')
+    args.composer = str(Path(args.composer).resolve())
+elif shutil.which(args.composer) is None:
+    parser.error('Composer is not installed on PATH. Install Composer or use --composer /path/to/composer.phar.')
 composer = ['php', args.composer] if args.composer.endswith('.phar') else [args.composer]
 subprocess.run(['npm', 'run', 'build'], cwd=ROOT, check=True)
 with tempfile.TemporaryDirectory(prefix='phpmongo-release-') as temporary:
     stage = Path(temporary) / f'phpmongo-{VERSION}'
     stage.mkdir()
-    for name in ['composer.json', 'composer.lock', 'LICENSE', 'README.md', 'INSTALL.md', 'GLOSSARY.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md']:
+    for name in ['composer.json', 'composer.lock', 'LICENSE', 'README.md', 'INSTALL.md']:
         shutil.copy2(ROOT / name, stage / name)
     for name in ['src', 'public', 'templates']:
         shutil.copytree(ROOT / name, stage / name)
@@ -29,11 +36,16 @@ with tempfile.TemporaryDirectory(prefix='phpmongo-release-') as temporary:
     packages = ['react', 'react-dom', 'scheduler', 'lucide-react', 'tailwindcss', '@fontsource-variable/manrope', '@fontsource/ibm-plex-mono']
     for package in packages:
         shutil.copy2(ROOT / 'node_modules' / package / 'LICENSE', notices / (package.replace('@', '').replace('/', '-') + '.txt'))
-    (stage / 'THIRD-PARTY-NOTICES.md').write_text('# Third-party notices\n\nPHP dependency licenses are retained under vendor/. Bundled React, Scheduler, Lucide, Tailwind, Manrope, and IBM Plex Mono license texts are under licenses/frontend/.\n\nThe colourful icons were supplied through the user-provided Drive folder; their original sources are recorded in docs/icon-sources.json. The project MIT license does not relicense third-party assets.\n')
+    (stage / 'THIRD-PARTY-NOTICES.md').write_text('# Third-party notices\n\nPHP dependency licenses are retained under vendor/. Bundled React, Scheduler, Lucide, Tailwind, Manrope, and IBM Plex Mono license texts are under licenses/frontend/.\n\nThe colourful icons were supplied through the user-provided Drive folder; their original sources are recorded in public/assets/icons/sources.json. The project MIT license does not relicense third-party assets.\n')
     (stage / 'config').mkdir()
     shutil.copy2(ROOT / 'config/phpmongo-config.example.php', stage / 'config/phpmongo-config.example.php')
-    shutil.copytree(ROOT / 'docs', stage / 'docs', ignore=shutil.ignore_patterns('api'))
-    (stage / 'docs/icon-sources.json').write_bytes((ROOT / 'public/assets/icons/sources.json').read_bytes())
+    # Developer and community documentation stays in the source repository.
+    for filename in ['README.md', 'INSTALL.md']:
+        document = stage / filename
+        text = re.sub(r'\]\(((?:docs/|GLOSSARY\.md|CONTRIBUTING\.md|CODE_OF_CONDUCT\.md)[^)]*)\)',
+                      lambda match: '](' + 'https://github.com/phpmongolab/phpmongo/blob/main/' + match[1] + ')',
+                      document.read_text())
+        document.write_text(text)
     subprocess.run(composer + ['install', '--no-dev', '--prefer-dist', '--no-interaction', '--no-progress', '--optimize-autoloader', '--no-plugins', '--no-scripts'], cwd=stage, check=True)
     subprocess.run(composer + ['check-platform-reqs', '--no-dev'], cwd=stage, check=True)
     prohibited = {'node_modules', '.git', '.agents', 'test-results', 'phpdocumentor', 'phpmongo-config.php'}

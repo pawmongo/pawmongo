@@ -1,6 +1,6 @@
 {
   "name": "phpmongo/phpmongo",
-  "description": "Private read-only MongoDB browser",
+  "description": "Private MongoDB browser with collection creation",
   "type": "project",
   "license": "MIT",
   "require": {

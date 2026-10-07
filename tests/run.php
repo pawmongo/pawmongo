@@ -50,6 +50,20 @@ $cookie = '';
 $root = dirname(__DIR__);
 $mongo = null;
 try {
+    $setupPath = $temp . '/first-run.php';
+    check(Config::setupSettings($setupPath, $root)['security']['force_local_boundary'] === true, 'missing config offers local-only setup');
+    rejects(fn() => Config::initialize($setupPath, $root, 'short'), 400, 'short setup password');
+    rejects(fn() => Config::initialize($setupPath, $root, 'éééééé'), 400, 'setup counts characters rather than UTF-8 bytes');
+    Config::initialize($setupPath, $root, 'new-first-run-password');
+    check(Config::setupSettings($setupPath, $root) === null, 'setup closes after initialization');
+    $saved = require $setupPath;
+    check($saved['security']['master_password'] === '' && password_verify('new-first-run-password', $saved['security']['master_password_hash']), 'setup stores hash only');
+    check(strlen($saved['security']['encryption_key']) === 64, 'setup generates 256-bit key');
+    rejects(fn() => Config::initialize($setupPath, $root, 'replacement-password'), 409, 'completed setup cannot overwrite credentials');
+    check(password_verify('new-first-run-password', (require $setupPath)['security']['master_password_hash']), 'original setup password retained');
+    $brokenSetup = $temp . '/broken-setup.php'; file_put_contents($brokenSetup, '<?php broken code');
+    rejects(fn() => Config::setupSettings($brokenSetup, $root), 503, 'corrupt config cannot enable setup');
+    rejects(fn() => Config::initialize($temp . '/missing/config.php', $root, 'long-enough-password'), 503, 'setup fails on missing directory');
     $configPath = $temp . '/config.php';
     file_put_contents($configPath, '<?php return ' . var_export(['security' => ['master_password' => 'test-master-password', 'master_password_hash' => '', 'encryption_key' => '', 'force_local_boundary' => true]], true) . ';');
     $config = Config::load($configPath, $root);
@@ -112,7 +126,7 @@ try {
     if (!extension_loaded('mongodb') || !function_exists('curl_init')) { throw new RuntimeException('Integration tests require mongodb and curl extensions'); }
     $mongoPort = port(); mkdir($temp . '/db');
     $mongod = getenv('PHPMONGO_TEST_MONGOD') ?: 'mongod';
-    $processes[] = proc_open([$mongod, '--bind_ip', '127.0.0.1', '--port', (string)$mongoPort, '--dbpath', $temp . '/db', '--logpath', $temp . '/mongo.log', '--quiet'], [0 => ['pipe', 'r'], 1 => ['file', $temp . '/mongo-process.log', 'a'], 2 => ['file', $temp . '/mongo-process.log', 'a']], $pipes);
+    $processes[] = proc_open([$mongod, '--auth', '--bind_ip', '127.0.0.1', '--port', (string)$mongoPort, '--dbpath', $temp . '/db', '--logpath', $temp . '/mongo.log', '--quiet'], [0 => ['pipe', 'r'], 1 => ['file', $temp . '/mongo-process.log', 'a'], 2 => ['file', $temp . '/mongo-process.log', 'a']], $pipes);
     $uri = 'mongodb://127.0.0.1:' . $mongoPort;
     $mongo = new MongoDB\Client($uri, ['serverSelectionTimeoutMS' => 300]);
     $ready = false;
@@ -120,6 +134,12 @@ try {
         try { $mongo->selectDatabase('admin')->command(['ping' => 1])->toArray(); $ready = true; break; } catch (Throwable) { usleep(100000); }
     }
     check($ready, 'isolated MongoDB started');
+    $mongoPassword = bin2hex(random_bytes(16));
+    $mongo->selectDatabase('admin')->command(['createUser' => 'test_admin', 'pwd' => $mongoPassword, 'roles' => ['root']])->toArray();
+    $uri = 'mongodb://test_admin:' . $mongoPassword . '@127.0.0.1:' . $mongoPort . '/?authSource=admin';
+    $mongo = new MongoDB\Client($uri, ['serverSelectionTimeoutMS' => 5000]);
+    $mongo->selectDatabase('admin')->command(['createUser' => 'test_reader', 'pwd' => $mongoPassword, 'roles' => [['role' => 'read', 'db' => 'phpmongo_test']]])->toArray();
+
     $collection = $mongo->selectCollection('phpmongo_test', 'documents');
     $docs = [];
     for ($i = 0; $i < 120; $i++) { $docs[] = ['_id' => $i, 'status' => $i % 2 ? 'active' : 'other', 'n' => $i, 'customer' => ['name' => 'Example'], 'items' => range(1, 30), 'createdAt' => new MongoDB\BSON\UTCDateTime()]; }
@@ -132,6 +152,7 @@ try {
     $docs[] = ['_id' => new MongoDB\BSON\Int64('9223372036854775807'), 'n' => 'int64'];
     $collection->insertMany($docs);
     $initialCount = $collection->countDocuments();
+    unlink($configPath); // Exercise browser initialization with no private configuration.
     $webPort = port();
     $command = [PHP_BINARY];
     if ($extensionPath = getenv('PHPMONGO_TEST_EXTENSION')) { $command = [...$command, '-d', 'extension=' . $extensionPath]; }
@@ -139,12 +160,26 @@ try {
     $processes[] = proc_open($command, [0 => ['pipe', 'r'], 1 => ['file', $temp . '/web.log', 'a'], 2 => ['file', $temp . '/web.log', 'a']], $pipes, $root, array_merge(getenv(), ['PHPMONGO_CONFIG' => $configPath]));
     $base = 'http://127.0.0.1:' . $webPort;
     for ($i = 0; $i < 50; $i++) { $socket = @fsockopen('127.0.0.1', $webPort); if ($socket) { fclose($socket); break; } usleep(100000); }
-    [$status, $health, , $cookieHeaders] = request($base, '/api/health'); check($status === 200 && $health['mode'] === 'read-only', 'health');
+    [$status, $setup, , $setupHeaders] = request($base, '/api/auth/status');
+    check($status === 200 && $setup['setup_required'] && !$setup['authenticated'], 'HTTP first-run status');
+    $setupToken = $setup['csrf_token'];
+    [$status] = request($base, '/api/setup', 'POST', ['password' => 'test-master-password', 'password_confirmation' => 'test-master-password']);
+    check($status === 403 && !file_exists($configPath), 'setup CSRF required');
+    [$status] = request($base, '/api/setup', 'POST', ['password' => 'test-master-password', 'password_confirmation' => 'different-password'], $setupToken);
+    check($status === 400 && !file_exists($configPath), 'setup rejects confirmation mismatch');
+    [$status] = request($base, '/api/setup', 'POST', ['password' => 'short', 'password_confirmation' => 'short'], $setupToken);
+    check($status === 400 && !file_exists($configPath), 'setup rejects weak length');
+    [$status, $installed] = request($base, '/api/setup', 'POST', ['password' => 'test-master-password', 'password_confirmation' => 'test-master-password'], $setupToken);
+    check($status === 200 && $installed['setup_complete'] && !str_contains(file_get_contents($configPath), 'test-master-password'), 'HTTP setup saves no cleartext password');
+    [$status] = request($base, '/api/setup', 'POST', ['password' => 'replacement-password', 'password_confirmation' => 'replacement-password'], $setupToken);
+    check(in_array($status, [401, 403, 404], true), 'setup endpoint unavailable after initialization');
+    [$status, $health, , $cookieHeaders] = request($base, '/api/health'); check($status === 200 && $health['mode'] === 'document-browsing-and-collection-creation', 'health');
     [$status, $publicUi] = request($base, '/api/ui'); check($status === 200 && isset($publicUi['sponsors']), 'anonymous public UI settings');
     [$status] = request($base, '/assets/%2e%2e/%2e%2e/config/phpmongo-config.example.php'); check($status === 404, 'asset path traversal rejected');
     [$status] = request($base, '/api/data/structure'); check($status === 401, 'unauthenticated data blocked');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'unauthenticated']); check($status === 401, 'collection creation requires administrator authentication');
     [$status, $auth, , $headers] = request($base, '/api/auth/status');
-    check($status === 200 && !$auth['authenticated'] && str_contains($cookieHeaders, 'HttpOnly') && str_contains($cookieHeaders, 'SameSite=Strict'), 'private session cookie');
+    check($status === 200 && !$auth['authenticated'] && str_contains($setupHeaders, 'HttpOnly') && str_contains($setupHeaders, 'SameSite=Strict'), 'private session cookie');
     $token = $auth['csrf_token'];
     [$status] = request($base, '/api/auth/login', 'POST', ['password' => 'test-master-password']); check($status === 403, 'CSRF enforced on login');
     [$status] = request($base, '/api/auth/login', 'POST', ['password' => 'wrong'], $token); check($status === 401, 'wrong password rejected');
@@ -152,8 +187,28 @@ try {
     [$status, $login] = request($base, '/api/auth/login', 'POST', ['password' => 'test-master-password'], $token);
     check($status === 200 && $cookie !== $oldCookie, 'login rotates session'); $token = $login['csrf_token'];
     [$status] = request($base, dataPath('/api/data/documents', ['db' => 'phpmongo_test', 'collection' => 'documents'])); check($status === 401, 'missing connection blocks fetch');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'new_collection'], $token); check($status === 401, 'collection creation requires connection');
     [$status] = request($base, '/api/connection', 'POST', ['uri' => $uri], $token); check($status === 200, 'connect verified');
     [$status, $tree] = request($base, '/api/data/structure'); check($status === 200 && $tree['databases'][0]['database'] === 'phpmongo_test', 'structure lists database');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'new_collection']); check($status === 403, 'collection creation requires CSRF');
+    [$status, $created] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'new_collection'], $token);
+    check($status === 201 && $created['created'], 'collection creation acknowledged');
+    check(in_array('new_collection', iterator_to_array($mongo->selectDatabase('phpmongo_test')->listCollectionNames()), true) && $mongo->selectCollection('phpmongo_test', 'new_collection')->countDocuments() === 0, 'empty collection really exists');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'new_collection'], $token); check($status === 409, 'duplicate collection rejected');
+    foreach (['admin', 'local', 'config'] as $system) {
+        [$status] = request($base, '/api/data/collections', 'POST', ['db' => $system, 'collection' => 'blocked'], $token); check($status === 403, 'system collection creation blocked');
+    }
+    foreach (['system.users', '$bad', 'bad$name', '', ' padded '] as $invalid) {
+        [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => $invalid], $token); check($status === 400, 'invalid collection creation name blocked');
+    }
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'bad/name', 'collection' => 'safe'], $token); check($status === 400, 'invalid creation database blocked');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'options', 'options' => ['viewOn' => 'documents']], $token); check($status === 400, 'arbitrary creation options blocked');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_newdb', 'collection' => 'first'], $token); check($status === 201, 'collection creates a new database');
+    $readerUri = 'mongodb://test_reader:' . $mongoPassword . '@127.0.0.1:' . $mongoPort . '/?authSource=admin';
+    [$status] = request($base, '/api/connection', 'POST', ['uri' => $readerUri], $token); check($status === 200, 'read-only account still connects');
+    [$status] = request($base, '/api/data/collections', 'POST', ['db' => 'phpmongo_test', 'collection' => 'reader_denied'], $token); check($status === 403, 'MongoDB read-only account cannot create collections');
+    check(!in_array('reader_denied', iterator_to_array($mongo->selectDatabase('phpmongo_test')->listCollectionNames()), true), 'denied creation changes no schema');
+    [$status] = request($base, '/api/connection', 'POST', ['uri' => $uri], $token); check($status === 200, 'restore administrative fixture connection');
     $params = ['db' => 'phpmongo_test', 'collection' => 'documents'];
     [$status, $preview, $raw] = request($base, dataPath('/api/data/documents', $params));
     check($status === 200 && $preview['count'] === 50 && strlen($raw) <= 1048576, 'bounded preview');

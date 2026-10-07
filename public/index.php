@@ -24,7 +24,14 @@ try {
     }
     require $root . '/vendor/autoload.php';
     $configPath = getenv('PHPMONGO_CONFIG') ?: $root . '/config/phpmongo-config.php';
-    $config = \PhpMongo\Core\Config::load($configPath, $root, static fn(array $settings) => \PhpMongo\Core\AccessBoundary::enforce($settings, $_SERVER));
+    $pending = \PhpMongo\Core\Config::setupSettings($configPath, $root);
+    if ($pending !== null) {
+        \PhpMongo\Core\AccessBoundary::enforce($pending, $_SERVER);
+        $config = $pending;
+        $config['storage'] = $root . '/var';
+    } else {
+        $config = \PhpMongo\Core\Config::load($configPath, $root, static fn(array $settings) => \PhpMongo\Core\AccessBoundary::enforce($settings, $_SERVER));
+    }
     $secure = \PhpMongo\Core\AccessBoundary::secure($_SERVER);
     $assetPath = rawurldecode(parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/');
     if (str_starts_with($assetPath, '/assets/')) {
@@ -46,7 +53,11 @@ try {
     if ($assetPath !== '/api/ui') {
         $session->start($config['storage'], $secure);
     }
-    \PhpMongo\Application::create($config, $session)->run();
+    if ($pending !== null) {
+        \PhpMongo\Installer::create($configPath, $root, $config, $session)->run();
+    } else {
+        \PhpMongo\Application::create($config, $session)->run();
+    }
 } catch (\Throwable $error) {
     $known = $error instanceof \PhpMongo\Core\ApiException;
     http_response_code($known ? $error->status : 503);

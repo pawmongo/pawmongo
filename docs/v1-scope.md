@@ -1,3 +1,5 @@
+> Scope update: administrators may now create empty collections through the authenticated, CSRF-protected creation endpoint. Document browsing remains read-only; document mutations, collection drops, and arbitrary commands remain unavailable. Theme selection offers Sage, Ocean, Sand, and Midnight. Earlier strict read-only requirements below describe the original design and are superseded only for collection creation.
+
 # Agreed v1.0.0 scope
 
 This document consolidates the decisions from the design interview. Requirements below define v1 behavior. The Slim backend and React UI are implemented and tested locally; release packaging is implemented; cross-platform validation remains pending.

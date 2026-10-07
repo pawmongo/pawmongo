@@ -1,8 +1,8 @@
 # phpMongo
 
-**Browse, filter, and inspect MongoDB documents from your browser—with a private, read-only PHP dashboard.**
+**Browse, filter, and inspect MongoDB documents from your browser—with a private PHP dashboard.**
 
-phpMongo gives developers a visual workspace for exploring local or remote MongoDB databases. Unlock the dashboard, connect your database, and start browsing collections. Built with **Slim Framework 4, React, and Tailwind CSS**, it runs on your own machine and ships with its frontend and PHP dependencies ready to use.
+phpMongo gives developers a visual workspace for exploring local or remote MongoDB databases and creating collections. Unlock the dashboard, connect your database, and start browsing collections. Built with **Slim Framework 4, React, and Tailwind CSS**, it runs on your own machine and ships with its frontend and PHP dependencies ready to use.
 
 [GitHub](https://github.com/phpmongolab/phpmongo) · [Install](#installation) · [Basic usage](#basic-usage) · [Developer docs](#development) · [Contribute](CONTRIBUTING.md) · [MIT license](LICENSE)
 
@@ -10,7 +10,7 @@ phpMongo gives developers a visual workspace for exploring local or remote Mongo
 
 ![phpMongo collection explorer with database navigation, JSON filtering, and document previews](docs/images/explorer.png)
 
-Browse collections, filter documents, and inspect typed values in a read-only workspace.
+Browse collections, filter documents, and inspect typed values in a private workspace with read-only document browsing.
 
 ![phpMongo document inspector showing a nested array item selected by field path](docs/images/document-details.png)
 
@@ -22,7 +22,9 @@ Open a document and explore a specific nested field. Screenshots show the runnin
 - **Find the documents you need:** filter with JSON or MongoDB Extended JSON, sort columns, and paginate results.
 - **Inspect complex data:** open individual documents and expand bounded views of nested fields with BSON types preserved.
 - **Keep access private:** unlock with a separate master password before entering MongoDB credentials. Local access is the default.
-- **Browse read-only:** the application exposes no MongoDB document or schema write operations, even when your database account has write permissions.
+- **Create collections:** add an empty collection in an existing or new database, with MongoDB permissions enforced.
+- **Choose your look:** select Sage, Ocean, Sand, or Midnight from the theme dropdown.
+- **Browse documents read-only:** document inserts, updates, deletes, and collection drops remain unavailable.
 
 The interface includes colourful SVG icons and populated community or sponsor placements on the login screen, sidebar, and this README.
 
@@ -48,13 +50,9 @@ Missing prerequisites display a setup guide. See [the installation guide](INSTAL
 
 Use the **`phpmongo-1.0.0.zip` release package**. The ZIP is built locally; it has not yet been published to [GitHub Releases](https://github.com/phpmongolab/phpmongo/releases). It includes compiled frontend assets and production PHP dependencies; you do not need Node.js or Composer to run it. Native MongoDB extension binaries are installed separately.
 
-Extract the archive and open its `phpmongo-1.0.0/` directory. Copy the configuration template:
+Extract the archive and open its `phpmongo-1.0.0/` directory. On your first visit, phpMongo shows a setup screen where you choose and confirm a master password of at least 12 characters. It creates the private configuration, saves a password hash, and generates an encryption key automatically.
 
-```sh
-cp config/phpmongo-config.example.php config/phpmongo-config.php
-```
-
-On Windows, you can copy and rename the file in Explorer. Edit the copied file and set `security.master_password` to your chosen password. First execution replaces it with a password hash and generates a private encryption key.
+For remote HTTPS hosting, first copy the configuration template and set `security.force_local_boundary` to `false`. Leave the password fields empty to use browser setup. See [the installation guide](INSTALL.md) for access boundaries and permissions.
 
 ### 3. Start phpMongo
 
@@ -86,13 +84,15 @@ To match an ObjectId, use MongoDB Extended JSON:
 ```
 
 5. **Inspect a row** to view its document details. Use a field path such as `items.21` to inspect a specific nested value.
-6. **Disconnect** to clear the database connection, or **sign out** to end your application session.
+6. **Create a collection** with **Create collection**: choose the database, enter a collection name, and submit. Your MongoDB account needs permission to create it. The new collection opens automatically.
+7. **Choose a theme** from the dropdown. The browser remembers only this display preference.
+8. **Disconnect** to clear the database connection, or **sign out** to end your application session.
 
 MongoDB credentials are encrypted in the server-side session using AES-256-GCM. Sessions expire after one hour of inactivity. Closing or reloading the tab sends a best-effort logout notification.
 
 ## Release status and limits
 
-**v1.0.0 is packaged and verified on Linux with PHP 8.3 and MongoDB 7.0.** Verification includes 79 backend checks and 25 browser checks. Windows/macOS package validation remains pending.
+**v1.0.0 is packaged and verified on Linux with PHP 8.3 and MongoDB 7.0.** Verification includes 116 backend checks and 40 browser checks. Windows/macOS package validation remains pending.
 
 The explorer shows 50 documents per page, up to page 200. Preview responses are limited to 1 MiB and details to 2 MiB; large or nested values carry truncation metadata. Queries have a five-second execution limit. Pagination can shift when other clients change the collection.
 
@@ -114,8 +114,8 @@ Useful commands:
 composer test             # Isolated MongoDB and backend checks
 npm run test:browser      # Browser checks against real Slim and MongoDB services
 composer docs             # Generate the phpDocumentor API reference
-python3 scripts/package-release.py  # Build the release ZIP
-python3 scripts/verify-release.py   # Verify and test the extracted package
+npm run package          # Build dist/phpmongo-1.0.0.zip
+npm run verify:release   # Verify and test the extracted package
 ```
 
 Tests require `mongod`, PHP's curl extension, and an installed Playwright Chromium browser. They start their own temporary MongoDB instance. Packaging also requires Python 3 and Composer.

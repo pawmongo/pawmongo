@@ -13,10 +13,9 @@ The Slim backend and React interface are implemented. See [frontend development]
 
 ```sh
 composer install
-cp config/phpmongo-config.example.php config/phpmongo-config.php
 ```
 
-Edit the copied file and set `security.master_password`. Then run:
+Start the server, then choose and confirm your master password on the browser setup screen:
 
 ```sh
 php -S 127.0.0.1:8080 -t public public/router.php
@@ -24,7 +23,7 @@ php -S 127.0.0.1:8080 -t public public/router.php
 
 Run `npm ci` and `npm run build` before opening `http://127.0.0.1:8080` to use the React dashboard. Without built assets, the entry page describes the backend.
 
-First execution hashes the password and generates the encryption secret through locked atomic config replacement. The generated config is private (mode 0600 on Unix). Both the file and its parent directory need suitable ownership and write permissions for replacement. Configure the web server to serve **only `public/`**, never the repository root.
+Browser setup stores a password hash directly; a preconfigured cleartext password is still converted on first execution. Bootstrap generates the encryption secret through locked atomic config replacement. The generated config is private (mode 0600 on Unix). Both the file and its parent directory need suitable ownership and write permissions for replacement. Configure the web server to serve **only `public/`**, never the repository root.
 
 If automatic conversion fails, an intact cleartext config with an existing valid encryption key can still authenticate and returns a persistent warning displayed in the UI. Missing encryption keys or corrupt config block setup. For immutable configs, supply a password hash and securely generated key yourself before starting:
 
@@ -36,6 +35,12 @@ Keep that key private. Never reuse the example's empty values or derive a key fr
 
 Apache can use `public/.htaccess` with URL rewriting enabled. Nginx must use `public/` as its root and forward application and asset requests through `index.php` when relying on its peer/host access boundary. A configuration that serves assets directly must enforce the same access boundary at the web-server layer. Reverse proxies must deny external access themselves for local deployments: PHP's loopback peer check sees the proxy, not the original client. Forwarded headers are deliberately not trusted. Explicit remote deployments require `force_local_boundary=false` and an HTTPS-aware PHP server configuration.
 
+## Browser setup
+
+An absent configuration or empty master-password fields enables the one-screen installer. `GET /api/auth/status` returns `setup_required=true` and a CSRF token; `POST /api/setup` accepts JSON `password` and `password_confirmation` with `X-CSRF-Token`. Passwords must match and contain at least 12 characters. On builds without Argon2, passwords are limited to 72 bytes. The installer uses locked atomic replacement, saves no plaintext, generates a random 32-byte key, and destroys its temporary session on completion. Existing credentials or a corrupt config never enable overwriting through setup.
+
+Missing configurations inherit the local-only template. Remote deployments must explicitly copy the template and set `force_local_boundary=false` before opening setup over HTTPS. Complete installation before sharing the address.
+
 ## Request sequence
 
 All API responses are JSON with `Cache-Control: no-store`. Retain the HttpOnly session cookie.
@@ -46,7 +51,7 @@ All API responses are JSON with `Cache-Control: no-store`. Retain the HttpOnly s
 4. Use the read-only data endpoints below.
 5. `POST /api/auth/logout` destroys the session; `DELETE /api/connection` clears only the database connection. Both require the token.
 
-Mutation HTTP methods exist only for application login/session/connection state, never for MongoDB document or schema changes. All unsafe methods require CSRF validation. A best-effort logout beacon can submit an URL-encoded `csrf_token`; hiding a tab must not automatically log out another active tab.
+POST `/api/data/collections` is the explicit schema mutation: it creates an empty ordinary collection. Document writes, collection drops, arbitrary database commands, and user-submitted pipelines remain unavailable. All unsafe methods require CSRF validation. A best-effort logout beacon can submit an URL-encoded `csrf_token`; hiding a tab must not automatically log out another active tab.
 
 | Method | Endpoint | Parameters |
 | --- | --- | --- |
@@ -57,6 +62,7 @@ Mutation HTTP methods exist only for application login/session/connection state,
 | POST | `/api/auth/logout` | CSRF token |
 | POST | `/api/connection` | JSON `uri` |
 | DELETE | `/api/connection` | None |
+| POST | `/api/data/collections` | JSON `db`, `collection`; CSRF header required |
 | GET | `/api/data/structure` | None |
 | GET | `/api/data/documents` | `db`, `collection`, optional `filter`, `sort`, `page` |
 | GET | `/api/data/document-details` | `db`, `collection`, `id`, `id_type`, optional `field` |
@@ -132,3 +138,7 @@ composer docs
 Open `docs/api/index.html`. The `phpdoc.dist.xml` configuration scans only `src/`, excluding private configuration, runtime sessions, tests, and dependencies. Generated HTML is ignored by version control and can be recreated; the source DocBlocks and generator configuration are retained.
 
 phpDocumentor is installed through its official Composer shim as a development dependency. Production dependency installation uses `composer install --no-dev`, excluding the documentation generator from the release ZIP. The shim's downloaded PHAR is signature-verified during installation.
+
+## Collection creation
+
+Authenticated, connected administrators can create an empty collection with `POST /api/data/collections`. Only database and collection names are accepted; arbitrary options, capped collections, views, and validators are excluded. The server blocks system databases, `system.` collections, dollar signs, malformed names, and surrounding whitespace. MongoDB creation permissions are enforced. Requests use a five-second limit and acknowledged write concern. Success returns 201; existing names return 409 and permission denials return 403. A read-only MongoDB account can still browse documents.

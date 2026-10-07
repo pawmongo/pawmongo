@@ -20,11 +20,11 @@ For live frontend development, keep the PHP server running and use a second term
 npm run dev
 ```
 
-Open the Vite URL. API requests are proxied to PHP on port 8080. Set `PHPMONGO_API_URL` in the Vite process environment to use another local PHP port. The Vite server binds only to loopback by default.
+Open the Vite URL. Vite serves the SVG icons directly from `public/assets/icons/`, so icons do not depend on the PHP server. API requests are proxied to PHP on port 8080; login and database browsing require that server to be running. Set `PHPMONGO_API_URL` in the Vite process environment to use another local PHP port. The Vite server binds only to loopback by default.
 
 ## Interface behavior
 
-- Password and connection fields are masked. Credentials are never written into localStorage or sessionStorage; form values are cleared after success.
+- Master-password fields are masked; the connection URI is visible while being entered. Credentials are never written into localStorage or sessionStorage; the chosen display theme alone can be stored as `phpmongo-theme`; form values are cleared after success.
 - Login and database-connection steps remain separate. Master-password authentication is required before any connection URI is submitted.
 - Sidebar discovery shows actual databases and collections. Direct opening supports accounts that cannot list the whole hierarchy.
 - Filters use object-root Extended JSON. Ctrl/Command + Enter submits the filter. Column headers apply sorting; the backend supplies the `_id` tie-breaker.
@@ -77,3 +77,19 @@ npx playwright install chromium
 ```
 
 `PHPMONGO_TEST_BROWSER` can point to an existing Chromium executable. Screenshots are generated under `test-results/`: `login.png`, `explorer.png`, `detail.png`, and `mobile.png`. These are test evidence with isolated sample data, not data from an administrator's database.
+
+### phpMongo wordmark
+
+The complete logo is a single SVG in `public/assets/icons/phpmongo-logo.svg`, with the leaf above the upper-left corner of the first p. Lettering is outlined, so it renders without a font dependency. Its Manrope-derived outlines retain the accompanying SIL Open Font License notice.
+
+Run `npm run test:assets` to verify icon loading while the PHP backend is unavailable.
+
+### First-run setup
+
+When no master password is configured, the interface shows a single setup screen with password and confirmation fields. Successful setup opens the login screen. Passwords are sent only to the CSRF-protected Slim setup endpoint and are never saved in browser storage.
+
+### Collection creation and themes
+
+The connected workspace exposes Create collection. Its dialog accepts database and collection names, shows server validation or permission errors, and opens the created collection after refreshing navigation. Existing document views stay read-only.
+
+The Theme dropdown offers Sage, Ocean, Sand, and Midnight on setup, login, connection, and workspace screens. Only the selected theme name is saved locally. All interface text is at least 12px.

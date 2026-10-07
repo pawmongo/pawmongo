@@ -89,6 +89,70 @@ final class Config
             }
         }
     }
+    /**
+     * Return setup settings only when no master credentials have been configured.
+     * Missing files use the shipped local-only template; corrupt files fail closed.
+     * @param string $path Private configuration path.
+     * @param string $root Application root containing the example template.
+     * @return array<string, mixed>|null Pending settings, or null after configuration.
+     * @throws ApiException If the configuration is malformed.
+     */
+    public static function setupSettings(string $path, string $root): ?array
+    {
+        clearstatcache(true, $path);
+        if (function_exists('opcache_invalidate') && is_file($path)) {
+            @opcache_invalidate($path, true);
+        }
+        $config = self::read(is_file($path) ? $path : $root . '/config/phpmongo-config.example.php');
+        $security = $config['security'] ?? null;
+        if (!is_array($security) || !is_string($security['master_password'] ?? '') || !is_string($security['master_password_hash'] ?? '')) {
+            throw new ApiException('Invalid security configuration. Repair the configuration file.', 503);
+        }
+        if (($security['master_password'] ?? '') !== '' || ($security['master_password_hash'] ?? '') !== '') {
+            return null;
+        }
+        $key = $security['encryption_key'] ?? '';
+        if (!is_string($key) || ($key !== '' && !preg_match('/^[a-fA-F0-9]{64}$/D', $key))) {
+            throw new ApiException('Invalid encryption key. Repair the configuration file.', 503);
+        }
+        return $config;
+    }
+    /**
+     * Create first-run credentials under the same lock used by normal bootstrap.
+     * Writes only a password hash and random encryption key, using atomic replacement.
+     * @param string $path Private configuration path.
+     * @param string $root Application root.
+     * @param string $password Chosen master password, at least 12 characters.
+     * @throws ApiException If setup was completed, input is invalid, or saving fails.
+     */
+    public static function initialize(string $path, string $root, string $password): void
+    {
+        if (preg_match_all('/./us', $password) < 12 || strlen($password) > 4096 || (!defined('PASSWORD_ARGON2ID') && strlen($password) > 72)) {
+            throw new ApiException('Choose a master password of at least 12 characters (maximum 72 bytes on PHP builds without Argon2).');
+        }
+        $lock = @fopen(dirname($path) . '/phpmongo-config.lock', 'c');
+        if ($lock === false || !flock($lock, LOCK_EX)) {
+            if ($lock !== false) fclose($lock);
+            throw new ApiException('Setup cannot write the configuration directory. Adjust its ownership and permissions.', 503);
+        }
+        try {
+            $config = self::setupSettings($path, $root);
+            if ($config === null) {
+                throw new ApiException('Setup has already been completed. Sign in with your master password.', 409);
+            }
+            $config['security']['master_password'] = '';
+            $config['security']['master_password_hash'] = password_hash($password, defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT);
+            if (($config['security']['encryption_key'] ?? '') === '') {
+                $config['security']['encryption_key'] = bin2hex(random_bytes(32));
+            }
+            if (!self::replace($path, $config)) {
+                throw new ApiException('Setup cannot save the private configuration. Adjust file and directory ownership and permissions, then retry.', 503);
+            }
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
+    }
     private static function read(string $path): array
     {
         try {
@@ -103,7 +167,7 @@ final class Config
     }
     private static function replace(string $path, array $config): bool
     {
-        if (!is_writable($path) || !is_writable(dirname($path))) {
+        if ((is_file($path) && !is_writable($path)) || !is_writable(dirname($path))) {
             return false;
         }
         $tmp = @tempnam(dirname($path), '.phpmongo-');

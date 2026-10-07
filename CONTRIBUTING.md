@@ -4,7 +4,7 @@ Thank you for helping improve phpMongo. Documentation fixes, reproducible bug re
 
 ## Before you start
 
-Read the [README](README.md), [v1 scope](docs/v1-scope.md), and relevant [architecture decisions](docs/adr/). Version one is a private, read-only MongoDB explorer. Changes must preserve master-password authentication, encrypted session credentials, local access defaults, and bounded database responses.
+Read the [README](README.md), [v1 scope](docs/v1-scope.md), and relevant [architecture decisions](docs/adr/). Version one is a private MongoDB explorer with read-only documents and explicit collection creation. Changes must preserve master-password authentication, encrypted session credentials, local access defaults, and bounded database responses.
 
 For a substantial feature or architecture change, discuss the proposal in a repository issue before investing in an implementation. Small fixes and documentation improvements can go straight to a pull request.
 

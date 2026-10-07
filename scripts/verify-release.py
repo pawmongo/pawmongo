@@ -27,6 +27,9 @@ with tempfile.TemporaryDirectory(prefix='phpmongo-extracted-') as temporary:
         assert hashlib.sha256((release / name).read_bytes()).hexdigest() == digest, name
     assert not (release / 'config/phpmongo-config.php').exists()
     assert not (release / 'var').exists()
+    assert not (release / 'docs').exists()
+    for name in ['GLOSSARY.md', 'CONTRIBUTING.md', 'CODE_OF_CONDUCT.md']:
+        assert not (release / name).exists()
     # Tests are supplied by this verifier after checking the archive's exact contents.
     shutil.copytree(root / 'tests', release / 'tests')
     subprocess.run(['php', str(release / 'tests/run.php')], cwd=release, check=True)
@@ -67,4 +70,4 @@ with tempfile.TemporaryDirectory(prefix='phpmongo-extracted-') as temporary:
             finally:
                 server.terminate()
                 server.wait(timeout=10)
-print('PASS: archive integrity, exact manifest, 79 extracted backend checks, missing-extension preflight, first-run config conversion, compiled page and assets')
+print('PASS: archive integrity, exact manifest, extracted backend checks, missing-extension preflight, first-run config conversion, compiled page and assets')

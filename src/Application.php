@@ -1,6 +1,6 @@
 <?php
 /**
- * Assembles the Slim application and its authentication and read-only routes.
+ * Assembles Slim authentication, bounded browsing, and collection-creation routes.
  */
 declare(strict_types=1);
 namespace PhpMongo;
@@ -12,7 +12,7 @@ use Slim\App;
 use Slim\Factory\AppFactory;
 use Slim\Exception\HttpException;
 /**
- * Assembles the Slim application and its authentication and read-only routes.
+ * Assembles Slim authentication, bounded browsing, and collection-creation routes.
  */
 final class Application
 {
@@ -27,7 +27,7 @@ final class Application
         $app = AppFactory::create();
         $connection = new ConnectionHandler($config, $session);
         $database = new DatabaseController($connection);
-        $app->get('/api/health', fn(Request $request, Response $response) => Json::response($response, ['status' => 'ok', 'mode' => 'read-only', 'version' => '1.0.0-dev']));
+        $app->get('/api/health', fn(Request $request, Response $response) => Json::response($response, ['status' => 'ok', 'mode' => 'document-browsing-and-collection-creation', 'version' => '1.0.0-dev']));
         $app->get('/api/ui', fn(Request $request, Response $response) => Json::response($response, UiConfig::publicContent($config)));
         $app->get('/api/auth/status', function (Request $request, Response $response) use ($session, $config) {
             $authenticated = $session->authenticated();
@@ -69,6 +69,7 @@ final class Application
             unset($_SESSION['mongo_conn']);
             return Json::response($response, ['connected' => false]);
         });
+        $app->post('/api/data/collections', fn(Request $request, Response $response) => $database->createCollection(self::body($request), $response));
         $app->get('/api/data/structure', [$database, 'structure']);
         $app->get('/api/data/documents', [$database, 'preview']);
         $app->get('/api/data/document-details', [$database, 'details']);
@@ -97,7 +98,7 @@ final class Application
         $errors->setDefaultErrorHandler(function (Request $request, \Throwable $error) use ($app) {
             $status = $error instanceof ApiException ? $error->status : ($error instanceof HttpException ? $error->getCode() : 500);
             $message = $error instanceof ApiException ? $error->getMessage() : match ($status) {
-                404 => 'Endpoint not found.', 405 => 'Method is not available. Database writes are disabled.',
+                404 => 'Endpoint not found.', 405 => 'Method is not available. Document writes are disabled.',
                 default => 'Database operation failed. Check database permissions, server compatibility, and query limits.',
             };
             return Json::response($app->getResponseFactory()->createResponse(), ['error' => $message], $status);

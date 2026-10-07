@@ -1,7 +1,7 @@
 export type EValue = null | boolean | number | string | EValue[] | { [key: string]: EValue };
 export type Field = { name: string; type: string; value: EValue; truncated: boolean };
 export type RecordView = { identifier: EValue; identifier_omitted: boolean; fields: Field[]; field_count: number; truncated: boolean; size_limited?: boolean };
-export type Auth = { authenticated: boolean; connected?: boolean; csrf_token: string | null; warnings: string[] };
+export type Auth = { setup_required?: boolean; authenticated: boolean; connected?: boolean; csrf_token: string | null; warnings: string[] };
 export type Database = { database: string; collections: string[] };
 export type Preview = { database: string; collection: string; page: number; count: number; documents: RecordView[]; next_page: number | null; max_page: number };
 export type Detail = { document: RecordView; field: string | null };

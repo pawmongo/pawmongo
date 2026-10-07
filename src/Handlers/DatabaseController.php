@@ -1,6 +1,6 @@
 <?php
 /**
- * Serves authenticated read-only hierarchy, preview, and bounded detail responses.
+ * Serves bounded document browsing and explicit authenticated collection creation.
  */
 declare(strict_types=1);
 namespace PhpMongo\Handlers;
@@ -9,7 +9,7 @@ use PhpMongo\Database\{Filter, Projection, Query};
 use MongoDB\BSON\Document;
 use Psr\Http\Message\{ResponseInterface as Response, ServerRequestInterface as Request};
 /**
- * Serves authenticated read-only hierarchy, preview, and bounded detail responses.
+ * Serves bounded document browsing and explicit authenticated collection creation.
  */
 final class DatabaseController
 {
@@ -110,6 +110,34 @@ final class DatabaseController
             'document' => $documents[0], 'array_limit' => 20,
             'limits' => ['object_fields' => 20, 'string_characters' => 1024, 'expansion_depth' => 2],
         ], 200, 2097152);
+    }
+    /**
+     * Create an empty ordinary collection without accepting arbitrary options.
+     * @param array<string, mixed> $body Validated JSON request body.
+     * @param Response $response Response receiving the acknowledged target.
+     * @return Response HTTP 201 JSON response on successful collection creation.
+     * @throws ApiException If validation, authorization, or creation fails.
+     */
+    public function createCollection(array $body, Response $response): Response
+    {
+        $client = $this->connection->activeClient();
+        [$db, $name] = Query::creationTarget($body);
+        $database = $client->selectDatabase($db);
+        try {
+            foreach ($database->listCollectionNames(['filter' => ['name' => $name], 'maxTimeMS' => 5000]) as $existing) {
+                if ($existing === $name) throw new ApiException('A collection with this name already exists.', 409);
+            }
+            $database->createCollection($name, ['maxTimeMS' => 5000, 'writeConcern' => new \MongoDB\Driver\WriteConcern(1, 5000)]);
+        } catch (\MongoDB\Driver\Exception\RuntimeException $error) {
+            if ($error->getCode() === 13) {
+                throw new ApiException('Your MongoDB account does not have permission to create collections in this database.', 403);
+            }
+            if ($error->getCode() === 48) {
+                throw new ApiException('A collection with this name already exists.', 409);
+            }
+            throw new ApiException('Collection creation failed. Check database permissions and connectivity.', 500);
+        }
+        return Json::response($response, ['database' => $db, 'collection' => $name, 'created' => true], 201);
     }
     private function execute(\MongoDB\Collection $collection, array $pipeline): array
     {

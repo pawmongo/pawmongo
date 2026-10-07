@@ -22,10 +22,27 @@ final class Query
         $db = self::text($params, 'db');
         $collection = self::text($params, 'collection');
         if (in_array($db, ['admin', 'local', 'config'], true)) {
-            throw new ApiException('System database browsing is disabled.', 403);
+            throw new ApiException('System database access is disabled.', 403);
         }
         if (strlen($db) > 63 || preg_match('~[\x00 /\\\\.\x22$]~', $db) || strlen($collection) > 120 || str_contains($collection, "\0") || str_starts_with($collection, '$')) {
             throw new ApiException('Invalid database or collection name.');
+        }
+        return [$db, $collection];
+    }
+    /**
+     * Validate names for the single allowed schema mutation: collection creation.
+     * @param array<string, mixed> $params Database and collection names only.
+     * @return array{0: string, 1: string} Validated non-system target.
+     * @throws ApiException If names are reserved, malformed, or options are supplied.
+     */
+    public static function creationTarget(array $params): array
+    {
+        if (array_diff(array_keys($params), ['db', 'collection', 'csrf_token']) !== []) {
+            throw new ApiException('Only database and collection names are accepted.');
+        }
+        [$db, $collection] = self::target($params);
+        if (trim($db) !== $db || trim($collection) !== $collection || str_contains($collection, '$') || str_starts_with($collection, 'system.')) {
+            throw new ApiException('Choose a non-system collection name without dollar signs or surrounding whitespace.');
         }
         return [$db, $collection];
     }
