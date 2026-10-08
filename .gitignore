@@ -1,41 +1,40 @@
-# Ignore everything except the Next.js application and its required files.
-/*
-!/.gitignore
-!/package.json
-!/package-lock.json
+/vendor/
+/config/phpmongo-config.php
+/config/*.lock
+/config/.phpmongo-*.tmp
+/var/
+*.log
+/docs/api/
 
-# Next.js source, routes, styles, and configuration.
-!/frontend/
-/frontend/.next/
-/frontend/out/
-/frontend/node_modules/
-/frontend/public/
-/frontend/tsconfig.tsbuildinfo
-/frontend/.env*
-/frontend/AGENTS.md
+/node_modules/
+/public/assets/
+/templates/app.html
+/test-results/
 
-# Scripts used by npm run dev and npm run build.
-!/scripts/
-/scripts/*
-!/scripts/dev.mjs
-!/scripts/prepare-next.mjs
+/dist/
 
-# Canonical icons copied into the Next.js public directory at build time.
-!/public/
-/public/*
 !/public/assets/
 /public/assets/*
 !/public/assets/icons/
 
-# Local tooling, credentials, caches, and logs at any depth.
-**/.agents/
-**/.claude/
-**/.codex/
-**/.cursor/
-**/.openai/
-**/.env*
-**/AGENTS.md
-**/CLAUDE.md
-**/GEMINI.md
-**/.cursorrules
-**/*.log
+/.agents/
+/skills-lock.json
+
+# Local AI tooling and assistant configuration
+/.claude/
+/.codex/
+/.cursor/
+/.github/copilot-instructions.md
+/.github/instructions/
+/.github/agents/
+/.github/prompts/
+/.aider*
+/.openai/
+AGENTS.md
+CLAUDE.md
+GEMINI.md
+.cursorrules
+
+/frontend/.next/
+/frontend/public/
+/frontend/tsconfig.tsbuildinfo
