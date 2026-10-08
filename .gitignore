@@ -38,11 +38,3 @@ GEMINI.md
 /frontend/.next/
 /frontend/public/
 /frontend/tsconfig.tsbuildinfo
-
-/.next/
-/out/
-/next-env.d.ts
-*.tsbuildinfo
-.env*
-!.env.example
-/.gitignore.backup-*
