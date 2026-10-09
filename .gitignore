@@ -1,7 +1,7 @@
 /vendor/
-/config/phpmongo-config.php
+/config/pawmongo-config.php
 /config/*.lock
-/config/.phpmongo-*.tmp
+/config/.pawmongo-*.tmp
 /var/
 *.log
 /docs/api/
@@ -38,3 +38,16 @@ GEMINI.md
 /frontend/.next/
 /frontend/public/
 /frontend/tsconfig.tsbuildinfo
+
+# Next.js theme dependencies and generated output
+/themes/node_modules/
+/themes/.next/
+/themes/tsconfig.tsbuildinfo
+/themes/.env*
+!/themes/.env.example
+/themes/test-results/
+/themes/.cache/
+/lib/vendor/
+/download/
+/scripts/__pycache__/
+/themes/out/

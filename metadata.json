@@ -1,6 +1,0 @@
-{
-  "name": "MongoDB Compass - Document Explorer",
-  "description": "Interactive MongoDB document browser and collection explorer with query filter, syntax highlighting, and multiple view modes matching the Atlas and Compass experience.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
